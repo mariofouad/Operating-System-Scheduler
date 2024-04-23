@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include "process.h"
+#include "queue.h"
 
 typedef short bool;
 #define true 1
