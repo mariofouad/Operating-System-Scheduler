@@ -11,4 +11,5 @@ clean:
 all: clean build
 
 run:
+	ipcrm -a
 	./process_generator.out

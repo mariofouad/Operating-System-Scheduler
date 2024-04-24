@@ -12,6 +12,8 @@
 #include <signal.h>
 #include "process.h"
 #include "queue.h"
+#include "priority_queue.h"
+
 
 typedef short bool;
 #define true 1
