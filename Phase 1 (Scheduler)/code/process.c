@@ -23,7 +23,6 @@ int main(int agrc, char *argv[])
         perror("Error in create");
         exit(-1);
     }
-    printf("Message Queue in process ID = %d\n", msgq_pid2);
 
     struct msgbuff2 messageProcess;
     int rec_val2 = msgrcv(msgq_pid2, &messageProcess, sizeof(messageProcess) - sizeof(long), 3, !IPC_NOWAIT);
@@ -37,6 +36,7 @@ int main(int agrc, char *argv[])
         printf("Message received in process successfully\n");
         printf("%d\n", rec_val2);
         printf("%ld\n", messageProcess.mtype);
+        printf("%d\n", messageProcess.process.id);
 
         // if(message2.process == NULL) printf("null\n");
         printf("Process running with id = %d while receiving with arr.time = %d and remtime = %d\n", messageProcess.process.id, messageProcess.process.runTime, messageProcess.process.pcb.remainingTime);
@@ -46,11 +46,12 @@ int main(int agrc, char *argv[])
     while (messageProcess.process.pcb.remainingTime > 0)
     {
         // remainingtime = ??;
-        int rec_val2 = msgrcv(msgq_pid2, &messageProcess, sizeof(messageProcess) - sizeof(long), 3, !IPC_NOWAIT);
+        // int rec_val2 = msgrcv(msgq_pid2, &messageProcess, sizeof(messageProcess) - sizeof(long), 3, !IPC_NOWAIT);
     }
+    exit(1);
     
     //terminate process
-    kill(getpid(), SIGKILL);
+   // kill(getpid(), SIGKILL);
     destroyClk(false);
 
     return 0;

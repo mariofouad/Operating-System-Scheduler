@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 
             // check is process arrival time
 
-            while (1)
+            while (isEmpty(ProcessQueue) != 1)
             {
                 struct Process *p = peek(ProcessQueue);
                 if (c >= p->arrivalTime)
