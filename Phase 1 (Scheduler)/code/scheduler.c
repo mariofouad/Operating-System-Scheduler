@@ -19,7 +19,127 @@ key_t key_id, key_id2;
 int msgq_id, msgq_id2, rec_val, sen_val;
 struct msgbuff message;
 
-struct Process RunningProcess;
+struct Process *runningProcess = NULL;
+//=================================================================================================================
+//============================================== HIGHEST-PRIORITY-FIRST ===========================================
+//=================================================================================================================
+void HPF()
+{
+    struct Priority_Queue *HPFReadyQueue = createPriorityQueue();
+    int prev_clk = -1;
+    int pid;
+    int wPid, status;
+    while (1)
+    {
+        int c = getClk();
+        if (c != prev_clk)
+        {
+            // receive process
+            int rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
+            while (rec_val2 != -1)
+            {
+                struct Process temp = message.process;
+                struct Process *newProcess = Create_Process(message.process.id, message.process.arrivalTime, message.process.runTime, message.process.priority);
+                PriorityEnqueue(HPFReadyQueue, newProcess, newProcess->priority);
+                printPriorityQueue(HPFReadyQueue);
+                printf("Message received successfully in HPF\n");
+                printf("THIS PROCESS IS %d\n", message.process.id);
+                printPriorityQueue(HPFReadyQueue);
+                printf("\n");
+
+                rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
+            }
+
+            // running process?
+            if (PQisEmpty(HPFReadyQueue) != 1 && runningProcess == NULL)
+            {
+                printf("//=============== new process ======================//\n");
+                printPriorityQueue(HPFReadyQueue);
+
+                runningProcess = PriorityDequeue(HPFReadyQueue);
+                printPriorityQueue(HPFReadyQueue);
+
+                if (PQisEmpty(HPFReadyQueue) != 1)
+                    printf("after dequeue : %d,  %d\n", PriorityPeek(HPFReadyQueue)->id, PriorityPeek(HPFReadyQueue)->pcb.remainingTime);
+                else
+                    printf("after dequeue, queue is empty\n");
+
+                printf("new running process remaining time: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
+
+                if (runningProcess->processId == -1)
+                {
+                    pid = fork();
+
+                    if (pid == 0)
+                    {
+                        // send el process to process.c
+                        execl("./process.out", "process.out", NULL);
+                    }
+                    else
+                    {
+                        // set el id gowa el process
+                        runningProcess->processId = pid;
+                    }
+                }
+
+                // send message queue lel process bel data
+                key_id2 = ftok("keyfile", 15);
+                msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                struct msgbuff2 HPFProcMsg;
+                HPFProcMsg.process = *runningProcess;
+                HPFProcMsg.mtype = 3;
+
+                if (msgq_id2 == -1)
+                {
+                    perror("Error in create");
+                    exit(-1);
+                }
+
+                sen_val = msgsnd(msgq_id2, &HPFProcMsg, sizeof(HPFProcMsg) - sizeof(long), !IPC_NOWAIT);
+                if (sen_val == -1)
+                {
+                    perror("msgrcv error");
+                }
+            }
+
+            else if (runningProcess != NULL)
+            {
+                runningProcess->pcb.remainingTime--;
+
+                printf("running process remaining time after decrement: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
+
+                // send message queue lel process bel data
+                key_id2 = ftok("keyfile", 15);
+                msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                struct msgbuff2 HPFProcMsg;
+                HPFProcMsg.process = *runningProcess;
+                HPFProcMsg.mtype = 3;
+
+                if (msgq_id2 == -1)
+                {
+                    perror("Error in create");
+                    exit(-1);
+                }
+
+                sen_val = msgsnd(msgq_id2, &HPFProcMsg, sizeof(HPFProcMsg) - sizeof(long), !IPC_NOWAIT);
+                if (sen_val == -1)
+                {
+                    perror("msgrcv error");
+                }
+                if (runningProcess->pcb.remainingTime == 0)
+                {
+                    wPid = wait(&status);
+                    printf("ANA ALLY 3MLT EXIT : %d\n", wPid);
+                    printf("REMAINING IS ZERO\n");
+                    runningProcess = NULL;
+                }
+            }
+            prev_clk = c;
+        }
+    }
+}
 
 //=================================================================================================================
 //============================================== ROUND-ROBIN ======================================================
@@ -27,7 +147,6 @@ struct Process RunningProcess;
 
 void RR()
 {
-    struct Process *runningProcess = NULL;
     int quanta = 0;
     struct Queue *rrReadyQueue = createQueue();
     int prev_clk = -1;
@@ -72,12 +191,12 @@ void RR()
                     if (pid == 0)
                     {
                         // send el process to process.c
-                        system("./process.out");
+                        execl("./process.out", "process.out", NULL);
                     }
                 }
                 else
                 {
-                    //kill(runningProcess->processId, SIGCONT);
+                    kill(runningProcess->processId, SIGCONT);
                 }
 
                 // set el id gowa el process
@@ -146,10 +265,10 @@ void RR()
                     if (isEmpty(rrReadyQueue) != 1)
                         printf("last process in the queue before enqueue %d,  %d\n", peek(rrReadyQueue)->id, peek(rrReadyQueue)->pcb.remainingTime);
                     else
+                    {
                         printf("quanta reached and ready is empty\n");
-
-                    //kill(runningProcess->processId, SIGSTOP);
-
+                    }
+                    kill(runningProcess->processId, SIGSTOP);
                     struct Process *process = runningProcess;
                     printQueue(rrReadyQueue);
 
@@ -171,60 +290,181 @@ void RR()
 //=================================================================================================================
 //========================================== SHORTEST-REAMAINING-TIME =============================================
 //=================================================================================================================
-void SRTN(struct Process p, struct Priority_Queue *ready_list)
+void SRTN()
 {
-
-    if (&RunningProcess == NULL)
+    struct Priority_Queue *SRTNReadyQueue = createPriorityQueue();
+    int prev_clk = -1;
+    int pid;
+    int wPid, status;
+    while (1)
     {
-        struct Process *process = PriorityDequeue(ready_list);
-        RunningProcess = *process;
-        // fork process.c and send process struct
-    }
-    else
-    {
-        if (RunningProcess.pcb.remainingTime > p.pcb.remainingTime)
+        int c = getClk();
+        if (c != prev_clk)
         {
-            // preempt running process by sending signal interrupt and fork new process
-            struct Process temp = RunningProcess;
-            RunningProcess = p;
-            PriorityEnqueue(ready_list, &temp, temp.pcb.remainingTime);
+            // receive process
+            int rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
+            while (rec_val2 != -1)
+            {
+                struct Process temp = message.process;
+                struct Process *newProcess = Create_Process(message.process.id, message.process.arrivalTime, message.process.runTime, message.process.priority);
+
+                // if (runningProcess != NULL && newProcess->pcb.remainingTime < runningProcess->pcb.remainingTime)
+                // {
+                //     struct Process *temp = runningProcess;
+                //     PriorityEnqueue(SRTNReadyQueue, temp, temp->pcb.remainingTime);
+                //     runningProcess = newProcess;
+                // }
+                // else
+                // {
+                PriorityEnqueue(SRTNReadyQueue, newProcess, newProcess->pcb.remainingTime);
+                //}
+
+                printf("Message received successfully in SRTN\n");
+                printPriorityQueue(SRTNReadyQueue);
+
+                rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
+            }
+
+            // running process?
+            if (PQisEmpty(SRTNReadyQueue) != 1 && runningProcess == NULL)
+            {
+                printf("//=============== new process ======================//\n");
+                printPriorityQueue(SRTNReadyQueue);
+
+                runningProcess = PriorityDequeue(SRTNReadyQueue);
+
+                if (PQisEmpty(SRTNReadyQueue) != 1)
+                    printf("after dequeue : %d,  %d\n", PriorityPeek(SRTNReadyQueue)->id, PriorityPeek(SRTNReadyQueue)->pcb.remainingTime);
+                else
+                    printf("after dequeue, queue is empty\n");
+
+                printf("new running process remaining time: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
+
+                if (runningProcess->processId == -1)
+                {
+                    pid = fork();
+
+                    if (pid == 0)
+                    {
+                        // send el process to process.c
+                        execl("./process.out", "process.out", NULL);
+                    }
+                    else
+                    {
+                        // set el id gowa el process
+                        runningProcess->processId = pid;
+                    }
+                }
+                else
+                {
+                    printf("here continuing\n");
+                    printf("continuing with id = %d and process id = %d", runningProcess->id, runningProcess->processId);
+                    kill(runningProcess->processId, SIGCONT);
+                }
+
+                // send message queue lel process bel data
+                key_id2 = ftok("keyfile", 15);
+                msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                struct msgbuff2 rrProcMsg;
+                rrProcMsg.process = *runningProcess;
+                rrProcMsg.mtype = 3;
+
+                if (msgq_id2 == -1)
+                {
+                    perror("Error in create");
+                    exit(-1);
+                }
+
+                sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
+                if (sen_val == -1)
+                {
+                    perror("msgrcv error");
+                }
+            }
+            else if (runningProcess != NULL)
+            {
+                if (PQisEmpty(SRTNReadyQueue) != 1)
+                {
+                    if (runningProcess->pcb.remainingTime > PriorityPeek(SRTNReadyQueue)->pcb.remainingTime)
+                    {
+                        printf("HAL ANA DA5LT HENA ? ANA : %d \n", runningProcess->processId);
+                        kill(runningProcess->processId, SIGSTOP);
+                        PriorityEnqueue(SRTNReadyQueue, runningProcess, runningProcess->pcb.remainingTime);
+                        runningProcess = NULL;
+                    }
+                    else
+                    {
+                        runningProcess->pcb.remainingTime--;
+                        printf("running process remaining time after decrement: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
+
+                        // send message queue lel process bel data
+                        key_id2 = ftok("keyfile", 15);
+                        msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                        struct msgbuff2 rrProcMsg;
+                        rrProcMsg.process = *runningProcess;
+                        rrProcMsg.mtype = 3;
+
+                        if (msgq_id2 == -1)
+                        {
+                            perror("Error in create");
+                            exit(-1);
+                        }
+
+                        sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
+                        if (sen_val == -1)
+                        {
+                            perror("msgrcv error");
+                        }
+
+                        if (runningProcess->pcb.remainingTime == 0)
+                        {
+                            wPid = wait(&status);
+                            printf("Exited with id = %d\n", runningProcess->processId);
+                            printf("REMAINING IS ZERO\n");
+                            runningProcess = NULL;
+                        }
+                    }
+                }
+                else
+                {
+                    runningProcess->pcb.remainingTime--;
+                    printf("running process remaining time after decrement: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
+
+                    // send message queue lel process bel data
+                    key_id2 = ftok("keyfile", 15);
+                    msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                    struct msgbuff2 rrProcMsg;
+                    rrProcMsg.process = *runningProcess;
+                    rrProcMsg.mtype = 3;
+
+                    if (msgq_id2 == -1)
+                    {
+                        perror("Error in create");
+                        exit(-1);
+                    }
+
+                    sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
+                    if (sen_val == -1)
+                    {
+                        perror("msgrcv error");
+                    }
+
+                    if (runningProcess->pcb.remainingTime == 0)
+                    {
+                        wPid = wait(&status);
+                        printf("Exited with id = %d\n", runningProcess->processId);
+                        printf("REMAINING IS ZERO\n");
+                        runningProcess = NULL;
+                    }
+                }
+            }
+
+            prev_clk = c;
         }
-        else
-        {
-            PriorityEnqueue(ready_list, &p, p.pcb.remainingTime);
-        }
     }
-
-    int pid = fork();
-    if (pid == 0)
-    {
-        system("./process.out");
-    }
-
-    // running process and sending it to process.c
-    key_t key_pid;
-    int msgq_pid, send_srtn_val;
-    key_pid = ftok("keyfile", 15);
-    msgq_pid = msgget(key_pid, 0666 | IPC_CREAT);
-    if (msgq_pid == -1)
-    {
-        perror("Error in create");
-        exit(-1);
-    }
-
-    printf("Message Queue SRTN ID = %d\n", msgq_pid);
-    struct msgbuff2 messageSRTN;
-    messageSRTN.mtype = 3;
-    messageSRTN.process = p;
-
-    if (p.pcb.remainingTime == 0)
-        printf("fuck\n");
-    else
-        printf("here we go. rem time is %d", p.pcb.remainingTime);
-
-    send_srtn_val = msgsnd(msgq_pid, &messageSRTN, sizeof(messageSRTN.process) - sizeof(long), !IPC_NOWAIT);
-    if (send_srtn_val == -1)
-        perror("Error in send");
 }
 //======================================================================================================
 //=============================================== MAIN =================================================
@@ -264,37 +504,45 @@ int main(int argc, char *argv[])
     {
         RR();
     }
-
-    struct Priority_Queue *ready_list = createPriorityQueue();
-
-    while (1)
+    else if (message.algotype == 1)
     {
-
-        // receive process
-        int rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, !IPC_NOWAIT);
-        if (rec_val2 == -1)
-        {
-            perror("msgrcv error");
-        }
-        else
-        {
-            printf("Message received successfully\n");
-            printf("%d\n", rec_val2);
-            printf("%ld\n", message.mtype);
-
-            printf("id = %d while receiving with arr.time = %d and remaingtime = %d\n", message.process.id, message.process.arrivalTime, message.process.pcb.remainingTime);
-
-            if (algo == 2)
-            {
-
-                SRTN(message.process, ready_list);
-            }
-        }
-
-        // if(algo == 2) {
-        //     SRTN(message2.process);
-        // }
+        HPF();
     }
+    else if (message.algotype == 2)
+    {
+        SRTN();
+    }
+
+    // struct Priority_Queue *ready_list = createPriorityQueue();
+
+    // while (1)
+    // {
+
+    //     // receive process
+    //     int rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, !IPC_NOWAIT);
+    //     if (rec_val2 == -1)
+    //     {
+    //         perror("msgrcv error");
+    //     }
+    //     else
+    //     {
+    //         printf("Message received successfully\n");
+    //         printf("%d\n", rec_val2);
+    //         printf("%ld\n", message.mtype);
+
+    //         printf("id = %d while receiving with arr.time = %d and remaingtime = %d\n", message.process.id, message.process.arrivalTime, message.process.pcb.remainingTime);
+
+    //         if (algo == 2)
+    //         {
+
+    //             SRTN(message.process, ready_list);
+    //         }
+    //     }
+
+    //     // if(algo == 2) {
+    //     //     SRTN(message2.process);
+    //     // }
+    // }
 
     destroyClk(true);
 }
