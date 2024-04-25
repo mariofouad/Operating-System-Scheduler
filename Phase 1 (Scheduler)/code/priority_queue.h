@@ -32,19 +32,22 @@ struct Priority_Queue* createPriorityQueue() {
 // Function to enqueue an element into the queue based on priority
 void PriorityEnqueue(struct Priority_Queue* queue, struct Process* data, int priority) {
     struct Priority_node* newnode = newPriorityNode(data, priority);
-    if (queue->rear == NULL || priority > queue->rear->priority) {
-        newnode->next = queue->rear;
-        queue->rear = newnode;
+    if (queue->front == NULL || priority < queue->front->priority) {
+        newnode->next = queue->front;
+        queue->front = newnode;
+        if (queue->rear == NULL) {
+            queue->rear = newnode;
+        }
     } else {
-        struct Priority_node* current = queue->rear;
-        while (current->next != NULL && priority <= current->next->priority) {
+        struct Priority_node* current = queue->front;
+        while (current->next != NULL && priority >= current->next->priority) {
             current = current->next;
         }
         newnode->next = current->next;
         current->next = newnode;
-    }
-    if (queue->front == NULL) {
-        queue->front = newnode;
+        if (current == queue->rear) {
+            queue->rear = newnode;
+        }
     }
 }
 
@@ -66,6 +69,9 @@ struct Process* PriorityDequeue(struct Priority_Queue* queue) {
     struct Process* data = queue->front->data;
     struct Priority_node* temp = queue->front;
     queue->front = queue->front->next;
+    if (queue->front == NULL) {
+        queue->rear = NULL;
+    }
     free(temp);
     return data;
 }
@@ -73,4 +79,21 @@ struct Process* PriorityDequeue(struct Priority_Queue* queue) {
 // Function to check if the queue is empty
 int PQisEmpty(struct Priority_Queue* queue) {
     return (queue->front == NULL);
+}
+
+// Function to print queue
+void printPriorityQueue(struct Priority_Queue* queue)
+{
+    if(PQisEmpty(queue) == 1) {
+        printf("Priority queue is empty.\n");
+        return;
+    }
+    struct Priority_node* current = queue->front;
+    printf("Processes in the queue:\n");
+    while (current != NULL)
+    {
+        printf("Process ID: %d, Priority: %d --> ", current->data->id, current->priority);
+        current = current->next;
+    }
+    printf("\n");
 }
