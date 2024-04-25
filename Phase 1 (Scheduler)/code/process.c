@@ -45,13 +45,16 @@ int main(int agrc, char *argv[])
     // remainingtime = ??;
     while (messageProcess.process.pcb.remainingTime > 0)
     {
+        printf("insid process while loop remaining time = %d\n", messageProcess.process.pcb.remainingTime);
         // remainingtime = ??;
-        // int rec_val2 = msgrcv(msgq_pid2, &messageProcess, sizeof(messageProcess) - sizeof(long), 3, !IPC_NOWAIT);
+        int rec_val2 = msgrcv(msgq_pid2, &messageProcess, sizeof(messageProcess) - sizeof(long), 3, !IPC_NOWAIT);
     }
-    exit(1);
-    
-    //terminate process
-   // kill(getpid(), SIGKILL);
+
+    // terminate process
+    printf("Process terminated with id: %d\n", getpid());
+    kill(getpid(), SIGKILL);
+
+    //exit(1);
     destroyClk(false);
 
     return 0;

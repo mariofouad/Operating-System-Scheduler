@@ -31,6 +31,7 @@ void RR()
     int quanta = 0;
     struct Queue *rrReadyQueue = createQueue();
     int prev_clk = -1;
+    int pid;
     while (1)
     {
         int c = getClk();
@@ -40,65 +41,66 @@ void RR()
             int rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
             while (rec_val2 != -1)
             {
-                enqueue(rrReadyQueue, &message.process);
-                printf("Message received successfully in ROUND ROBIN\n");
-                // printf("%d\n", rec_val2);
-                // printf("%ld\n", message.mtype);
-                // printf("%d\n", message.process.id);
+                struct Process temp = message.process;
+                struct Process *newProcess = Create_Process(message.process.id, message.process.arrivalTime, message.process.runTime, message.process.priority);
+                enqueue(rrReadyQueue, newProcess);
+                printf("Message received successfully in ROUND-ROBIN\n");
+                printQueue(rrReadyQueue);
                 rec_val2 = msgrcv(msgq_id, &message, sizeof(message) - sizeof(long), 2, IPC_NOWAIT);
             }
-            
+
             // running process?
             if (isEmpty(rrReadyQueue) != 1 && runningProcess == NULL)
             {
+                printf("//=============== new process ======================//\n");
+                printQueue(rrReadyQueue);
 
                 runningProcess = dequeue(rrReadyQueue);
+                printQueue(rrReadyQueue);
+
                 if (isEmpty(rrReadyQueue) != 1)
-                    printf("after dequeue :%d\n", peek(rrReadyQueue)->pcb.remainingTime);
+                    printf("after dequeue : %d,  %d\n", peek(rrReadyQueue)->id, peek(rrReadyQueue)->pcb.remainingTime);
                 else
-                    printf("empty\n");
-                
-                printf("running process remaining time: %d\n", runningProcess->pcb.remainingTime);
+                    printf("after dequeue, queue is empty\n");
+
+                printf("new running process remaining time: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
                 quanta = 0;
                 if (runningProcess->processId == -1)
                 {
-                    int pid = fork();
+                    pid = fork();
 
                     if (pid == 0)
                     {
                         // send el process to process.c
                         system("./process.out");
                     }
-                    else
-                    {
-                        // parent
-                        // set el id gowa el process
-                        runningProcess->processId = pid;
-                        // send message queue lel process bel data
-                        key_id2 = ftok("keyfile", 15);
-                        msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
-
-                        struct msgbuff2 rrProcMsg;
-                        rrProcMsg.process = *runningProcess;
-                        rrProcMsg.mtype = 3;
-
-                        if (msgq_id2 == -1)
-                        {
-                            perror("Error in create");
-                            exit(-1);
-                        }
-
-                        sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
-                        if (sen_val == -1)
-                        {
-                            perror("msgrcv error");
-                        }
-                    }
                 }
-                // else
-                // {
-                //     kill(runningProcess->processId, SIGCONT);
-                // }
+                else
+                {
+                    //kill(runningProcess->processId, SIGCONT);
+                }
+
+                // set el id gowa el process
+                runningProcess->processId = pid;
+                // send message queue lel process bel data
+                key_id2 = ftok("keyfile", 15);
+                msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                struct msgbuff2 rrProcMsg;
+                rrProcMsg.process = *runningProcess;
+                rrProcMsg.mtype = 3;
+
+                if (msgq_id2 == -1)
+                {
+                    perror("Error in create");
+                    exit(-1);
+                }
+
+                sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
+                if (sen_val == -1)
+                {
+                    perror("msgrcv error");
+                }
             }
             else if (runningProcess != NULL)
             {
@@ -106,8 +108,29 @@ void RR()
                 runningProcess->pcb.remainingTime--;
 
                 printf("QUANTA %d\n", quanta);
-                printf("REMAINING TIMEEEEE %d\n", runningProcess->pcb.remainingTime);
+                printf("running process remaining time after decrement: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
 
+                // set el id gowa el process
+                runningProcess->processId = pid;
+                // send message queue lel process bel data
+                key_id2 = ftok("keyfile", 15);
+                msgq_id2 = msgget(key_id2, 0666 | IPC_CREAT);
+
+                struct msgbuff2 rrProcMsg;
+                rrProcMsg.process = *runningProcess;
+                rrProcMsg.mtype = 3;
+
+                if (msgq_id2 == -1)
+                {
+                    perror("Error in create");
+                    exit(-1);
+                }
+
+                sen_val = msgsnd(msgq_id2, &rrProcMsg, sizeof(rrProcMsg) - sizeof(long), !IPC_NOWAIT);
+                if (sen_val == -1)
+                {
+                    perror("msgrcv error");
+                }
                 if (runningProcess->pcb.remainingTime == 0)
                 {
                     printf("REMAINING IS ZERO\n");
@@ -118,11 +141,23 @@ void RR()
                 else if (message.quantum == quanta)
                 {
                     printf("QUANTA REACHED\n");
-                    printf("running process remaining time: %d\n", runningProcess->pcb.remainingTime);
+                    printf("running process remaining time after quanta reached: %d,  %d\n", runningProcess->id, runningProcess->pcb.remainingTime);
 
-                    // kill(runningProcess->processId, SIGSTOP);
-                    enqueue(rrReadyQueue, runningProcess);
-                    //printf("idd ba3d:%d\n", peek(rrReadyQueue)->pcb.remainingTime);
+                    if (isEmpty(rrReadyQueue) != 1)
+                        printf("last process in the queue before enqueue %d,  %d\n", peek(rrReadyQueue)->id, peek(rrReadyQueue)->pcb.remainingTime);
+                    else
+                        printf("quanta reached and ready is empty\n");
+
+                    //kill(runningProcess->processId, SIGSTOP);
+
+                    struct Process *process = runningProcess;
+                    printQueue(rrReadyQueue);
+
+                    enqueue(rrReadyQueue, process);
+                    printQueue(rrReadyQueue);
+
+                    printf("last process in the queue after enqueue %d,  %d\n", peek(rrReadyQueue)->id, peek(rrReadyQueue)->pcb.remainingTime);
+                    printf("\n");
 
                     quanta = 0;
                     runningProcess = NULL;
