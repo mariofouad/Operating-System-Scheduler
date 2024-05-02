@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "gtk.h": "c",
+        "gtkcss.h": "c",
+        "gdkversionmacros.h": "c"
+    }
+}
