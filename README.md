@@ -5,7 +5,6 @@ A program that simulates the operation of the process scheduler in a multiproces
 * [Introduction](#Introduction)
 * [How To Run](#How-To-Run)
 * [How To Use](#How-To-Use)
-* [Project Description File](https://docs.google.com/document/d/1MGKfCWCv1HpQ30vOlOghCRcJZ1W1KU87/edit)
 * [Contributors](#Contributors)
 * [License](./LICENSE)
 # Overview
